@@ -1,0 +1,87 @@
+{
+  "username": "123",
+  "slotIndex": 0,
+  "timestamp": 1777711595691,
+  "rows": 5,
+  "cols": 5,
+  "boardIcons": [
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      1,
+      1,
+      1,
+      0
+    ],
+    [
+      0,
+      1,
+      1,
+      1,
+      0
+    ],
+    [
+      0,
+      1,
+      1,
+      1,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "boardEmpty": [
+    [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    [
+      true,
+      false,
+      false,
+      false,
+      true
+    ],
+    [
+      true,
+      false,
+      false,
+      false,
+      true
+    ],
+    [
+      true,
+      false,
+      false,
+      false,
+      true
+    ],
+    [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  ],
+  "score": 0,
+  "seconds": 5,
+  "minutes": 0,
+  "hours": 0,
+  "difficulty": "easy",
+  "remainingPairs": 4
+}
