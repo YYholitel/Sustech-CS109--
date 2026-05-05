@@ -8,6 +8,44 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Utils {
+    public static boolean hasNonEmptyCell(GameBoard gameBoard) {
+        for (int r = 0; r < gameBoard.getRowCnt(); r++) {
+            for (int c = 0; c < gameBoard.getColCnt(); c++) {
+                if (!gameBoard.getCell(r, c).isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasAnyValidMove(GameBoard gameBoard) {
+        int rowCnt = gameBoard.getRowCnt();
+        int colCnt = gameBoard.getColCnt();
+        for (int r1 = 0; r1 < rowCnt; r1++) {
+            for (int c1 = 0; c1 < colCnt; c1++) {
+                Cell cellA = gameBoard.getCell(r1, c1);
+                if (cellA.isEmpty()) {
+                    continue;
+                }
+                int icon = cellA.getIconIndex();
+                for (int r2 = r1; r2 < rowCnt; r2++) {
+                    int startC = (r2 == r1) ? c1 + 1 : 0;
+                    for (int c2 = startC; c2 < colCnt; c2++) {
+                        Cell cellB = gameBoard.getCell(r2, c2);
+                        if (cellB.isEmpty() || cellB.getIconIndex() != icon) {
+                            continue;
+                        }
+                        if (canLinkAB(gameBoard, cellA.getPos(), cellB.getPos())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private static boolean isEmptyAt(GameBoard gameBoard, int row, int col) {
         if (row < 0 || row >= gameBoard.getRowCnt() || col < 0 || col >= gameBoard.getColCnt()) {
             return true;

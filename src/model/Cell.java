@@ -36,4 +36,10 @@ public class Cell {
         isEmpty = empty;
         iconIndex = 0;
     }
+
+    public void restore(int iconIndex) {
+        this.isEmpty = false;
+        this.iconIndex = iconIndex;
+        this.isChosen = false;
+    }
 }

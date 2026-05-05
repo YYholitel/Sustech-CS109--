@@ -8,9 +8,8 @@ public class StatusPanel extends JPanel {
     JLabel timeLabel;
     Scores scores;
     Timer timer;
-    int seconds;
-    int minutes;
-    int hours;
+    int remainingSeconds;
+    Runnable onTimeUp;
     int offSetX;
     int offSetY;
     int width;
@@ -27,18 +26,19 @@ public class StatusPanel extends JPanel {
         timeLabel = new JLabel("00:00:00");
         scores = new Scores();
         timer = new Timer(1000, e -> {
-            seconds++;
-            if (seconds == 60) {
-                minutes++;
-                seconds = 0;
-                if (minutes == 60) {
-                    minutes = 0;
-                    hours++;
+            if (remainingSeconds <= 0) {
+                stopTimer();
+                return;
+            }
+            remainingSeconds--;
+            updateTimeLabel();
+            if (remainingSeconds <= 0) {
+                stopTimer();
+                if (onTimeUp != null) {
+                    onTimeUp.run();
                 }
             }
-            timeLabel.setText(String.format("%02d:%02d:%02d", hours, minutes, seconds));
         });
-        timer.start();
         statusLabel.setFont(new Font("Arial", Font.BOLD, 50));
         timeLabel.setFont(new Font("Arial", Font.BOLD, 50));
         Dimension size = statusLabel.getPreferredSize();
@@ -70,10 +70,37 @@ public class StatusPanel extends JPanel {
         return scores;
     }
 
+    public void startCountdown(int totalSeconds) {
+        stopTimer();
+        remainingSeconds = Math.max(0, totalSeconds);
+        updateTimeLabel();
+        timer.start();
+    }
+
+    public void stopTimer() {
+        if (timer.isRunning()) {
+            timer.stop();
+        }
+    }
+
     public void resetTimer() {
-        seconds = 0;
-        minutes = 0;
-        hours = 0;
-        timeLabel.setText("00:00:00");
+        stopTimer();
+        remainingSeconds = 0;
+        updateTimeLabel();
+    }
+
+    public int getRemainingSeconds() {
+        return remainingSeconds;
+    }
+
+    public void setOnTimeUp(Runnable onTimeUp) {
+        this.onTimeUp = onTimeUp;
+    }
+
+    private void updateTimeLabel() {
+        int hours = remainingSeconds / 3600;
+        int minutes = (remainingSeconds % 3600) / 60;
+        int seconds = remainingSeconds % 60;
+        timeLabel.setText(String.format("%02d:%02d:%02d", hours, minutes, seconds));
     }
 }

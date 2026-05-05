@@ -10,6 +10,8 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,6 +34,29 @@ public class BoardPanel extends JPanel {
     Position secondSelected = null;
     boolean animating = false;
     Scores scores;
+    StatusPanel statusPanel;
+    Runnable onBoardUpdated;
+    boolean gameOver = false;
+    int recordCount = 0;
+    UndoSnapshot lastUndo = null;
+
+    private static class UndoSnapshot {
+        private final Position posA;
+        private final Position posB;
+        private final int iconA;
+        private final int iconB;
+        private final int scoreBefore;
+        private final int comboBefore;
+
+        private UndoSnapshot(Position posA, Position posB, int iconA, int iconB, int scoreBefore, int comboBefore) {
+            this.posA = posA;
+            this.posB = posB;
+            this.iconA = iconA;
+            this.iconB = iconB;
+            this.scoreBefore = scoreBefore;
+            this.comboBefore = comboBefore;
+        }
+    }
 
     public Position getPositionByPoint(int x, int y) {
 
@@ -72,7 +97,8 @@ public class BoardPanel extends JPanel {
         repaint();
     }
 
-    public BoardPanel(GameBoard gameBoard, int offSetX, int offSetY, int width, int height, Scores scores) {
+    public BoardPanel(GameBoard gameBoard, int offSetX, int offSetY, int width, int height, Scores scores,
+            StatusPanel statusPanel, Runnable onBoardUpdated) {
         this.offSetX = offSetX;
         this.offSetY = offSetY;
         this.setBounds(offSetX, offSetY, width, height);
@@ -86,6 +112,9 @@ public class BoardPanel extends JPanel {
         this.cellWidth = this.width / totalCol;
         this.cellHeight = this.height / totalRow;
         this.scores = scores;
+        this.statusPanel = statusPanel;
+        this.onBoardUpdated = onBoardUpdated;
+        resetTracking();
         File dir = new File("resource");
         File[] files = dir.listFiles();
 
@@ -146,10 +175,59 @@ public class BoardPanel extends JPanel {
         this.lineVisible = false;
         this.lineList.clear();
         this.animating = false;
+        this.gameOver = false;
+        resetTracking();
         repaint();
     }
 
+    public void setGameOver(boolean gameOver) {
+        this.gameOver = gameOver;
+        if (gameOver) {
+            gameBoard.clearAllChosen();
+            firstSelected = null;
+            secondSelected = null;
+            lastUndo = null;
+            clearLine();
+        }
+    }
+
+    public GameBoard getGameBoard() {
+        return gameBoard;
+    }
+
+    public void resetTracking() {
+        recordCount = 0;
+        lastUndo = null;
+        clearRecordFile();
+    }
+
+    public boolean undoLastClear() {
+        if (gameOver || animating || lastUndo == null) {
+            return false;
+        }
+        Cell c1 = gameBoard.getCell(lastUndo.posA.getRow(), lastUndo.posA.getCol());
+        Cell c2 = gameBoard.getCell(lastUndo.posB.getRow(), lastUndo.posB.getCol());
+        c1.restore(lastUndo.iconA);
+        c2.restore(lastUndo.iconB);
+        gameBoard.clearAllChosen();
+        firstSelected = null;
+        secondSelected = null;
+        clearLine();
+        if (scores != null) {
+            scores.restoreState(lastUndo.scoreBefore, lastUndo.comboBefore);
+        }
+        lastUndo = null;
+        repaint();
+        if (onBoardUpdated != null) {
+            onBoardUpdated.run();
+        }
+        return true;
+    }
+
     public void handleClick(int x, int y) {
+        if (gameOver) {
+            return;
+        }
         if (animating) {
             return;
         }
@@ -191,6 +269,12 @@ public class BoardPanel extends JPanel {
         // 判断消除条件：图标相同 且 可连线
         if (isTheSame(firstCell, secondCell) && Utils.canLinkAB(gameBoard, firstSelected, secondSelected)) {
             List<Position> linkPath = Utils.findLinkPath(gameBoard, firstSelected, secondSelected);
+            int scoreBefore = scores != null ? scores.getScore() : 0;
+            int comboBefore = scores != null ? scores.getCombo() : 0;
+            lastUndo = new UndoSnapshot(firstSelected, secondSelected,
+                    firstCell.getIconIndex(), secondCell.getIconIndex(),
+                    scoreBefore, comboBefore);
+            writeClearRecord(firstCell, secondCell, linkPath);
             animating = true;
             showLinkPath(linkPath);
             Timer timer = new Timer(300, e -> {
@@ -209,6 +293,9 @@ public class BoardPanel extends JPanel {
                 secondSelected = null;
                 animating = false;
                 repaint();
+                if (onBoardUpdated != null) {
+                    onBoardUpdated.run();
+                }
             });
             timer.setRepeats(false);
             timer.start();
@@ -216,10 +303,62 @@ public class BoardPanel extends JPanel {
             gameBoard.clearAllChosen();
             firstSelected = null;
             secondSelected = null;
+            lastUndo = null;
             if (scores != null) {
                 scores.resetCombo();
             }
             repaint();
+        }
+    }
+
+    private void writeClearRecord(Cell firstCell, Cell secondCell, List<Position> linkPath) {
+        if (recordCount >= 3) {
+            return;
+        }
+        File file = new File("resource/records/Records.txt");
+        File parent = file.getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
+        }
+        String pathText = formatPath(linkPath);
+        String line = "Step " + (recordCount + 1)
+                + ": icons=" + firstCell.getIconIndex() + "," + secondCell.getIconIndex()
+                + "; posA=(" + firstSelected.getRow() + "," + firstSelected.getCol() + ")"
+                + "; posB=(" + secondSelected.getRow() + "," + secondSelected.getCol() + ")"
+                + "; path=" + pathText;
+        try (FileWriter writer = new FileWriter(file, true)) {
+            writer.write(line + System.lineSeparator());
+            recordCount++;
+        } catch (IOException ex) {
+            recordCount++;
+        }
+    }
+
+    private String formatPath(List<Position> path) {
+        if (path == null || path.isEmpty()) {
+            return "n/a";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < path.size(); i++) {
+            Position pos = path.get(i);
+            if (i > 0) {
+                sb.append("->");
+            }
+            sb.append("(").append(pos.getRow()).append(",").append(pos.getCol()).append(")");
+        }
+        return sb.toString();
+    }
+
+    private void clearRecordFile() {
+        File file = new File("resource/records/Records.txt");
+        File parent = file.getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
+        }
+        try (FileWriter writer = new FileWriter(file, false)) {
+            writer.write("");
+        } catch (IOException ex) {
+            return;
         }
     }
 

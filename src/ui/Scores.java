@@ -56,6 +56,12 @@ public class Scores extends JPanel {
     return combo;
   }
 
+  public void restoreState(int score, int combo) {
+    this.score = score;
+    this.combo = combo;
+    updateLabels();
+  }
+
   private void updateLabels() {
     scoreLabel.setText("Score: " + score);
     comboLabel.setText("Combo: " + combo);

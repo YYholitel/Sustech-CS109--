@@ -9,15 +9,17 @@ import java.util.function.Consumer;
 public class ControlPanel extends JPanel {
     StatusPanel statusPanel;
     JButton startButton;
+    JButton undoButton;
     DifficultySelector difficultySelector;
     Consumer<Difficulty> onStart;
+    Runnable onUndo;
     int offSetX;
     int offSetY;
     int width;
     int height;
 
     public ControlPanel(StatusPanel statusPanel, int offSetX, int offSetY, int width, int height,
-            Consumer<Difficulty> onStart) {
+            Consumer<Difficulty> onStart, Runnable onUndo) {
         this.setLayout(null);
         this.setBounds(offSetX, offSetY, width, height);
         this.offSetX = offSetX;
@@ -25,12 +27,14 @@ public class ControlPanel extends JPanel {
         this.width = width;
         this.height = height;
         this.startButton = new JButton("start");
+        this.undoButton = new JButton("undo");
         this.onStart = onStart;
+        this.onUndo = onUndo;
         this.statusPanel = statusPanel;
         int btnWidth = 150;
         int btnHeight = 50;
         int gap = 20;
-        int totalWidth = btnWidth * 3 + gap * 2;
+        int totalWidth = btnWidth * 4 + gap * 3;
         int baseX = (width - totalWidth) / 2;
         int y = (height - btnHeight) / 2;
 
@@ -42,21 +46,32 @@ public class ControlPanel extends JPanel {
                 gap);
         difficultySelector.setBounds(baseX, y, btnWidth * 2 + gap, btnHeight);
         startButton.setBounds(baseX + (btnWidth + gap) * 2, y, btnWidth, btnHeight);
+        undoButton.setBounds(baseX + (btnWidth + gap) * 3, y, btnWidth, btnHeight);
 
         startButton.setFont(new Font("Arial", Font.BOLD, 25));
+        undoButton.setFont(new Font("Arial", Font.BOLD, 25));
 
         startButton.setFocusPainted(false);
+        undoButton.setFocusPainted(false);
         this.add(difficultySelector);
         this.add(startButton);
+        this.add(undoButton);
         // 难度设置
         this.startButton.addActionListener(e -> {
             statusPanel.setStatus("RUN");
             // 重置分数和连对计数，确保新游戏从零开始
             statusPanel.getScores().resetAll();
-            // 重置计时器
-            statusPanel.resetTimer();
+            // 启动倒计时
+            Difficulty selected = difficultySelector.getSelectedDifficulty();
+            statusPanel.startCountdown(selected.getTotalSeconds());
             if (onStart != null) {
-                onStart.accept(difficultySelector.getSelectedDifficulty());
+                onStart.accept(selected);
+            }
+        });
+
+        this.undoButton.addActionListener(e -> {
+            if (onUndo != null) {
+                onUndo.run();
             }
         });
     }
