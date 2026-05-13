@@ -3,7 +3,7 @@ package model;
 public class GameBoard {
     int rowCnt;
     int colCnt;
-    Cell[][] board;
+    public Cell[][] board;
 
     public GameBoard(int rowCnt, int colCnt, Cell[][] border) {
         this.rowCnt = rowCnt;

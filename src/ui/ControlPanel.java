@@ -18,8 +18,20 @@ public class ControlPanel extends JPanel {
     int width;
     int height;
 
+    /**
+     * 构造 ControlPanel
+     * 
+     * @param statusPanel        顶部的状态面板引用，用于更新状态和计时
+     * @param offSetX            面板 X 偏移
+     * @param offSetY            面板 Y 偏移
+     * @param width              面板宽度
+     * @param height             面板高度
+     * @param difficultySelector 外部注入的难度选择组件（避免与其它 UI 冲突）
+     * @param onStart            游戏开始回调，接收选择的 Difficulty
+     * @param onUndo             撤销回调
+     */
     public ControlPanel(StatusPanel statusPanel, int offSetX, int offSetY, int width, int height,
-            Consumer<Difficulty> onStart, Runnable onUndo) {
+            DifficultySelector difficultySelector, Consumer<Difficulty> onStart, Runnable onUndo) {
         this.setLayout(null);
         this.setBounds(offSetX, offSetY, width, height);
         this.offSetX = offSetX;
@@ -38,12 +50,8 @@ public class ControlPanel extends JPanel {
         int baseX = (width - totalWidth) / 2;
         int y = (height - btnHeight) / 2;
 
-        difficultySelector = new DifficultySelector(
-                baseX,
-                y,
-                btnWidth,
-                btnHeight,
-                gap);
+        // 使用外部传入的难度选择器，确保界面上只存在一个难度选择区域
+        this.difficultySelector = difficultySelector;
         difficultySelector.setBounds(baseX, y, btnWidth * 2 + gap, btnHeight);
         startButton.setBounds(baseX + (btnWidth + gap) * 2, y, btnWidth, btnHeight);
         undoButton.setBounds(baseX + (btnWidth + gap) * 3, y, btnWidth, btnHeight);
@@ -76,37 +84,6 @@ public class ControlPanel extends JPanel {
         });
     }
 
-    private static class DifficultySelector extends JPanel {
-        private final JButton easyButton;
-        private final JButton hardButton;
-        private Difficulty selectedDifficulty;
-
-        // 难度选择组件
-        DifficultySelector(int x, int y, int btnWidth, int btnHeight, int gap) {
-            this.setLayout(null);
-            this.easyButton = new JButton("Easy");
-            this.hardButton = new JButton("Hard");
-            this.selectedDifficulty = Difficulty.Easy;
-
-            easyButton.setBounds(0, 0, btnWidth, btnHeight);
-            hardButton.setBounds(btnWidth + gap, 0, btnWidth, btnHeight);
-
-            easyButton.setFont(new Font("Arial", Font.BOLD, 20));
-            hardButton.setFont(new Font("Arial", Font.BOLD, 20));
-
-            easyButton.setFocusPainted(false);
-            hardButton.setFocusPainted(false);
-
-            this.add(easyButton);
-            this.add(hardButton);
-
-            easyButton.addActionListener(e -> selectedDifficulty = Difficulty.Easy);
-            hardButton.addActionListener(e -> selectedDifficulty = Difficulty.Hard);
-        }
-
-        Difficulty getSelectedDifficulty() {
-            return selectedDifficulty;
-        }
-    }
+    // 注意：难度选择器已提取为独立组件 `DifficultySelector`，以便在多个面板间复用并避免冲突。
 
 }

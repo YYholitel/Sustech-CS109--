@@ -11,6 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+/**
+ * 存档管理器：负责将游戏存档序列化到 `saves` 目录下的 JSON 文件，
+ * 并提供读取、删除与列出存档插槽的功能。
+ */
 public class SaveManager {
     private static final String SAVE_DIR = "saves";
 

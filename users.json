@@ -5,5 +5,12 @@
     "totalGames": 0,
     "totalWins": 0,
     "highestScore": 0
+  },
+  "159789": {
+    "username": "159789",
+    "passwordHash": "cdaa23108bb8942952038ac69ec8529d7c2072d96753b8beb684032b93756d26",
+    "totalGames": 0,
+    "totalWins": 0,
+    "highestScore": 0
   }
 }

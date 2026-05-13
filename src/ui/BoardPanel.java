@@ -253,7 +253,7 @@ public class BoardPanel extends JPanel {
         if (firstSelected.equals(pos)) {
             clickedCell.setChosen(false);
             firstSelected = null;
-            secondSelected = null;
+            secondSelected = pos;
             repaint();
             return;
         }
@@ -301,7 +301,9 @@ public class BoardPanel extends JPanel {
             timer.start();
         } else {
             gameBoard.clearAllChosen();
-            firstSelected = null;
+            secondCell.setChosen(true);
+            firstSelected = secondSelected;
+
             secondSelected = null;
             lastUndo = null;
             if (scores != null) {

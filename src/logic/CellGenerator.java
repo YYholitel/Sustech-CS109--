@@ -5,6 +5,11 @@ import model.GameBoard;
 import model.Position;
 import utils.Utils;
 
+import javax.swing.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public class CellGenerator {
   // 根据难度生成棋盘
   private Difficulty difficulty;
@@ -38,7 +43,7 @@ public class CellGenerator {
       }
 
       GameBoard gameBoard = new GameBoard(total, total, board);
-      if (fillByReverse(gameBoard, board, fillPositions)) {
+      if (fillByBacktrackingDFS(gameBoard, board, fillPositions)) {
         return gameBoard;
       }
       result = gameBoard;
@@ -75,67 +80,30 @@ public class CellGenerator {
     }
   }
 
-  private boolean fillByReverse(GameBoard gameBoard, Cell[][] board, java.util.List<Position> fillPositions) {
-    java.util.List<Position> empties = new java.util.ArrayList<>(fillPositions);
-    java.util.Random random = new java.util.Random();
-    int maxIconType = difficulty.getMaxIconType();
-    int pairIndex = 0;
+    private boolean fillByBacktrackingDFS(GameBoard gameBoard, Cell[][] board, java.util.List<Position> fillPositions) {
+        int maxIconType = difficulty.getMaxIconType();
+        int total = fillPositions.size();
 
-    while (empties.size() >= 2) {
-      boolean placed = false;
-      int tryLimit = Math.min(200, empties.size() * empties.size());
-      for (int t = 0; t < tryLimit; t++) {
-        int idxA = random.nextInt(empties.size());
-        int idxB = random.nextInt(empties.size() - 1);
-        if (idxB >= idxA) {
-          idxB += 1;
+        // 生成成对的图标列表
+        List<Integer> icons = new ArrayList<>();
+        for (int i = 0; i < total / 2; i++) {
+            int type = i % maxIconType + 1;
+            icons.add(type);
+            icons.add(type);
         }
-        Position posA = empties.get(idxA);
-        Position posB = empties.get(idxB);
-        if (Utils.canLinkAB(gameBoard, posA, posB)) {
-          int type = (pairIndex % maxIconType) + 1;
-          board[posA.getRow()][posA.getCol()] = new Cell(posA, false, type);
-          board[posB.getRow()][posB.getCol()] = new Cell(posB, false, type);
-          if (idxA > idxB) {
-            empties.remove(idxA);
-            empties.remove(idxB);
-          } else {
-            empties.remove(idxB);
-            empties.remove(idxA);
-          }
-          pairIndex++;
-          placed = true;
-          break;
+
+        // 随机打乱
+        Collections.shuffle(icons);
+
+        // 填充到棋盘
+        for (int i = 0; i < fillPositions.size(); i++) {
+            Position pos = fillPositions.get(i);
+            int type = icons.get(i);
+            board[pos.getRow()][pos.getCol()] = new Cell(pos, false, type);
         }
-      }
-      if (!placed) {
-        int[] indices = findFirstConnectablePairIndices(gameBoard, empties);
-        if (indices != null) {
-          int idxA = indices[0];
-          int idxB = indices[1];
-          Position posA = empties.get(idxA);
-          Position posB = empties.get(idxB);
-          int type = (pairIndex % maxIconType) + 1;
-          board[posA.getRow()][posA.getCol()] = new Cell(posA, false, type);
-          board[posB.getRow()][posB.getCol()] = new Cell(posB, false, type);
-          if (idxA > idxB) {
-            empties.remove(idxA);
-            empties.remove(idxB);
-          } else {
-            empties.remove(idxB);
-            empties.remove(idxA);
-          }
-          pairIndex++;
-          placed = true;
-        }
-      }
-      if (!placed) {
-        return false;
-      }
+
+        return true;
     }
-    return empties.isEmpty();
-  }
-
   private int[] findFirstConnectablePairIndices(GameBoard gameBoard, java.util.List<Position> empties) {
     for (int i = 0; i < empties.size(); i++) {
       Position posA = empties.get(i);
