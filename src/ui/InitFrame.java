@@ -7,7 +7,7 @@ import java.awt.*;
 
 public class InitFrame extends JFrame {
     public InitFrame() {
-        super("连连看 - 初始化");
+        super("连连看 - 回到大厅");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(560, 360);
         setLocationRelativeTo(null);
@@ -17,7 +17,7 @@ public class InitFrame extends JFrame {
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(new Color(245, 247, 250));
 
-        JLabel titleLabel = new JLabel("选择游戏模式", SwingConstants.CENTER);
+        JLabel titleLabel = new JLabel("连连看", SwingConstants.CENTER);
         titleLabel.setFont(UiFont.font(Font.BOLD, 28));
         titleLabel.setBorder(BorderFactory.createEmptyBorder(24, 12, 12, 12));
         root.add(titleLabel, BorderLayout.NORTH);
@@ -25,10 +25,7 @@ public class InitFrame extends JFrame {
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.setOpaque(false);
 
-        JLabel tipLabel = new JLabel("先选择图标主题，再进入登录界面", SwingConstants.CENTER);
-        tipLabel.setFont(UiFont.font(Font.PLAIN, 16));
-        tipLabel.setBorder(BorderFactory.createEmptyBorder(0, 12, 10, 12));
-        centerPanel.add(tipLabel, BorderLayout.NORTH);
+
 
         IconType iconTypePanel = new IconType();
         JPanel wrapper = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -48,11 +45,19 @@ public class InitFrame extends JFrame {
             new LoginFrame();
         });
 
+        ModernButton challengeButton = new ModernButton("闯关模式");
+        challengeButton.setFont(UiFont.font(Font.BOLD, 14));
+        challengeButton.addActionListener(e -> {
+            dispose();
+            new LevelSelectFrame();
+        });
+
         ModernButton exitButton = new ModernButton("退出");
         exitButton.setFont(UiFont.font(Font.PLAIN, 14));
         exitButton.addActionListener(e -> System.exit(0));
 
         bottomPanel.add(continueButton);
+        bottomPanel.add(challengeButton);
         bottomPanel.add(exitButton);
         root.add(bottomPanel, BorderLayout.SOUTH);
 

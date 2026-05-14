@@ -53,7 +53,15 @@ public class CellGenerator {
 
   private java.util.List<Position> getFillPositions(int size) {
     java.util.List<Position> positions = new java.util.ArrayList<>();
-    if (difficulty == Difficulty.Easy) {
+
+    // Level4~Level6 固定使用原 Hard 模式：整盘填充
+    if (difficulty == Difficulty.Level4 || difficulty == Difficulty.Level5 || difficulty == Difficulty.Level6) {
+      fillAllInnerCells(positions, size);
+      return positions;
+    }
+
+    // Level1~Level3 与 Level1 统一：使用两个 4x4 方块的填充方式
+    if (difficulty == Difficulty.Level1 || difficulty == Difficulty.Level2 || difficulty == Difficulty.Level3) {
       int blockSize = 4;
       int minSize = blockSize * 2 + 1;
       if (size >= minSize) {
@@ -64,12 +72,16 @@ public class CellGenerator {
       }
     }
 
+    fillAllInnerCells(positions, size);
+    return positions;
+  }
+
+  private void fillAllInnerCells(java.util.List<Position> positions, int size) {
     for (int i = 1; i < size + 1; i++) {
       for (int j = 1; j < size + 1; j++) {
         positions.add(new Position(i, j));
       }
     }
-    return positions;
   }
 
   private void addBlock(java.util.List<Position> positions, int startRow, int startCol, int blockSize) {
@@ -80,30 +92,31 @@ public class CellGenerator {
     }
   }
 
-    private boolean filling(GameBoard gameBoard, Cell[][] board, java.util.List<Position> fillPositions) {
-        int maxIconType = difficulty.getMaxIconType();
-        int total = fillPositions.size();
+  private boolean filling(GameBoard gameBoard, Cell[][] board, java.util.List<Position> fillPositions) {
+    int maxIconType = difficulty.getMaxIconType();
+    int total = fillPositions.size();
 
-        // 生成成对的图标列表
-        List<Integer> icons = new ArrayList<>();
-        for (int i = 0; i < total / 2; i++) {
-            int type = i % maxIconType + 1;
-            icons.add(type);
-            icons.add(type);
-        }
-
-        // 随机打乱
-        Collections.shuffle(icons);
-
-        // 填充到棋盘
-        for (int i = 0; i < fillPositions.size(); i++) {
-            Position pos = fillPositions.get(i);
-            int type = icons.get(i);
-            board[pos.getRow()][pos.getCol()] = new Cell(pos, false, type);
-        }
-
-        return true;
+    // 生成成对的图标列表
+    List<Integer> icons = new ArrayList<>();
+    for (int i = 0; i < total / 2; i++) {
+      int type = i % maxIconType + 1;
+      icons.add(type);
+      icons.add(type);
     }
+
+    // 随机打乱
+    Collections.shuffle(icons);
+
+    // 填充到棋盘
+    for (int i = 0; i < fillPositions.size(); i++) {
+      Position pos = fillPositions.get(i);
+      int type = icons.get(i);
+      board[pos.getRow()][pos.getCol()] = new Cell(pos, false, type);
+    }
+
+    return true;
+  }
+
   private int[] findFirstConnectablePairIndices(GameBoard gameBoard, java.util.List<Position> empties) {
     for (int i = 0; i < empties.size(); i++) {
       Position posA = empties.get(i);

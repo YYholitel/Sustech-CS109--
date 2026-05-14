@@ -16,6 +16,7 @@ public class StatusPanel extends JPanel {
     int width;
     int height;
     private boolean started = false;
+    private boolean paused = false;
 
     public StatusPanel(int offSetX, int offSetY, int width, int height) {
         this.setLayout(null);
@@ -87,6 +88,7 @@ public class StatusPanel extends JPanel {
         stopTimer();
         remainingSeconds = Math.max(0, totalSeconds);
         started = true;
+        paused = false;
         updateTimeLabel();
         timer.start();
     }
@@ -95,6 +97,25 @@ public class StatusPanel extends JPanel {
         if (timer.isRunning()) {
             timer.stop();
         }
+        paused = false;
+    }
+
+    public void pauseCountdown() {
+        if (!started || remainingSeconds <= 0 || paused) {
+            return;
+        }
+        if (timer.isRunning()) {
+            timer.stop();
+        }
+        paused = true;
+    }
+
+    public void resumeCountdown() {
+        if (!started || remainingSeconds <= 0 || !paused) {
+            return;
+        }
+        timer.start();
+        paused = false;
     }
 
     public void resetTimer() {
@@ -110,6 +131,10 @@ public class StatusPanel extends JPanel {
 
     public int getRemainingSeconds() {
         return remainingSeconds;
+    }
+
+    public boolean isPaused() {
+        return paused;
     }
 
     public void setOnTimeUp(Runnable onTimeUp) {

@@ -62,6 +62,11 @@ public class Scores extends JPanel {
     updateLabels();
   }
 
+  public void applyUndoPenalty() {
+    score = (score * 9) / 10;
+    updateLabels();
+  }
+
   private void updateLabels() {
     scoreLabel.setText("Score: " + score);
     comboLabel.setText("Combo: " + combo);

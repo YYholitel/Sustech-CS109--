@@ -16,10 +16,12 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Deque;
 
 public class BoardPanel extends JPanel {
     int offSetX;
@@ -43,8 +45,9 @@ public class BoardPanel extends JPanel {
     StatusPanel statusPanel;
     Runnable onBoardUpdated;
     boolean gameOver = false;
+    boolean paused = false;
     int recordCount = 0;
-    UndoSnapshot lastUndo = null;
+    private final Deque<UndoSnapshot> undoHistory = new ArrayDeque<>();
     private final Timer comboPopupTimer;
     private String comboPopupText = null;
     private Color comboPopupColor = new Color(76, 175, 80);
@@ -54,6 +57,16 @@ public class BoardPanel extends JPanel {
     private static final int COMBO_POPUP_FADE_START_MS = 750;
     private static final int COMBO_POPUP_TICK_MS = 40;
     private final Font comboPopupFont = new Font("Serif", Font.BOLD | Font.ITALIC, 54);
+
+    // 屏幕中心关卡提示（棋子数量 + 限时）
+    private String levelOverlayText = null;
+    private float levelOverlayAlpha = 0f; // 0..1
+    private boolean levelOverlayVisible = false;
+    private Timer levelOverlayHoldTimer = null; // 等待显示完成后开始淡出
+    private Timer levelOverlayFadeTimer = null; // 淡出计时器
+    private static final int LEVEL_OVERLAY_HOLD_MS = 3000; // 保持时间（3s）
+    private static final int LEVEL_OVERLAY_FADE_MS = 800; // 淡出时长
+    private static final int LEVEL_OVERLAY_TICK_MS = 40;
 
     // 简易淡出+缩放动画（最小实现）
     private Map<String, Long> fadeMap = new HashMap<>(); // key -> startTime
@@ -216,7 +229,7 @@ public class BoardPanel extends JPanel {
             gameBoard.clearAllChosen();
             firstSelected = null;
             secondSelected = null;
-            lastUndo = null;
+            undoHistory.clear();
             clearLine();
             hideComboPopup();
         }
@@ -228,26 +241,27 @@ public class BoardPanel extends JPanel {
 
     public void resetTracking() {
         recordCount = 0;
-        lastUndo = null;
+        undoHistory.clear();
         clearRecordFile();
     }
 
     public boolean undoLastClear() {
-        if (gameOver || animating || lastUndo == null) {
+        if (gameOver || animating || undoHistory.isEmpty()) {
             return false;
         }
-        Cell c1 = gameBoard.getCell(lastUndo.posA.getRow(), lastUndo.posA.getCol());
-        Cell c2 = gameBoard.getCell(lastUndo.posB.getRow(), lastUndo.posB.getCol());
-        c1.restore(lastUndo.iconA);
-        c2.restore(lastUndo.iconB);
+        UndoSnapshot snapshot = undoHistory.pop();
+        Cell c1 = gameBoard.getCell(snapshot.posA.getRow(), snapshot.posA.getCol());
+        Cell c2 = gameBoard.getCell(snapshot.posB.getRow(), snapshot.posB.getCol());
+        c1.restore(snapshot.iconA);
+        c2.restore(snapshot.iconB);
         gameBoard.clearAllChosen();
         firstSelected = null;
         secondSelected = null;
         clearLine();
         if (scores != null) {
-            scores.restoreState(lastUndo.scoreBefore, lastUndo.comboBefore);
+            scores.restoreState(snapshot.scoreBefore, snapshot.comboBefore);
+            scores.applyUndoPenalty();
         }
-        lastUndo = null;
         repaint();
         if (onBoardUpdated != null) {
             onBoardUpdated.run();
@@ -257,6 +271,9 @@ public class BoardPanel extends JPanel {
 
     public void handleClick(int x, int y) {
         if (gameOver) {
+            return;
+        }
+        if (paused) {
             return;
         }
         if (animating) {
@@ -301,9 +318,9 @@ public class BoardPanel extends JPanel {
             List<Position> linkPath = Utils.findLinkPath(gameBoard, firstSelected, secondSelected);
             int scoreBefore = scores != null ? scores.getScore() : 0;
             int comboBefore = scores != null ? scores.getCombo() : 0;
-            lastUndo = new UndoSnapshot(firstSelected, secondSelected,
+            undoHistory.push(new UndoSnapshot(firstSelected, secondSelected,
                     firstCell.getIconIndex(), secondCell.getIconIndex(),
-                    scoreBefore, comboBefore);
+                scoreBefore, comboBefore));
             writeClearRecord(firstCell, secondCell, linkPath);
             animating = true;
             showLinkPath(linkPath);
@@ -316,7 +333,6 @@ public class BoardPanel extends JPanel {
             firstSelected = secondSelected;
 
             secondSelected = null;
-            lastUndo = null;
             if (scores != null) {
                 scores.resetCombo();
             }
@@ -336,6 +352,10 @@ public class BoardPanel extends JPanel {
         comboPopupShownAt = System.currentTimeMillis();
         comboPopupTimer.restart();
         repaint();
+    }
+
+    public void setPaused(boolean paused) {
+        this.paused = paused;
     }
 
     private void hideComboPopup() {
@@ -426,6 +446,101 @@ public class BoardPanel extends JPanel {
 
         popup.setComposite(originalComposite);
         popup.dispose();
+    }
+
+    // ---------- 关卡覆盖层（中央文本显示 + 等待 + 淡出） ----------
+    private void paintLevelOverlay(Graphics2D g2) {
+        if (!levelOverlayVisible || levelOverlayText == null || levelOverlayAlpha <= 0f) {
+            return;
+        }
+        Graphics2D g = (Graphics2D) g2.create();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        // 字体大小根据面板尺寸自适应
+        int fontSize = Math.max(20, Math.min(getWidth(), getHeight()) / 12);
+        Font overlayFont = UiFont.font(Font.BOLD, fontSize);
+        g.setFont(overlayFont);
+        FontMetrics fm = g.getFontMetrics();
+        int textWidth = fm.stringWidth(levelOverlayText);
+        int textHeight = fm.getHeight();
+        int ascent = fm.getAscent();
+
+        int x = (getWidth() - textWidth) / 2;
+        int y = (getHeight() - textHeight) / 2 + ascent;
+
+        Composite orig = g.getComposite();
+
+        // 现代风格：淡蓝色阴影 + 半透明主体
+        Color lightBlue = new Color(173, 216, 230);
+
+        // 阴影
+        g.setComposite(AlphaComposite.SrcOver.derive(Math.max(0f, levelOverlayAlpha * 0.18f)));
+        g.setColor(new Color(0, 0, 0));
+        g.drawString(levelOverlayText, x + 4, y + 4);
+
+        // 主文字（半透明淡蓝色）
+        g.setComposite(AlphaComposite.SrcOver.derive(Math.max(0f, levelOverlayAlpha * 0.95f)));
+        g.setColor(lightBlue);
+        g.drawString(levelOverlayText, x, y);
+
+        g.setComposite(orig);
+        g.dispose();
+    }
+
+    public void showLevelOverlay(String text) {
+        if (text == null) return;
+        levelOverlayText = text;
+        levelOverlayAlpha = 0.95f;
+        levelOverlayVisible = true;
+        // 取消已有计时器
+        if (levelOverlayHoldTimer != null) {
+            levelOverlayHoldTimer.stop();
+        }
+        if (levelOverlayFadeTimer != null) {
+            levelOverlayFadeTimer.stop();
+        }
+
+        // 等待保持一段时间后开始淡出
+        levelOverlayHoldTimer = new Timer(LEVEL_OVERLAY_HOLD_MS, e -> startOverlayFade());
+        levelOverlayHoldTimer.setRepeats(false);
+        levelOverlayHoldTimer.start();
+        repaint();
+    }
+
+    private void startOverlayFade() {
+        if (levelOverlayHoldTimer != null) {
+            levelOverlayHoldTimer.stop();
+        }
+        final long start = System.currentTimeMillis();
+        levelOverlayFadeTimer = new Timer(LEVEL_OVERLAY_TICK_MS, ev -> {
+            long elapsed = System.currentTimeMillis() - start;
+            float p = Math.min(1f, elapsed / (float) LEVEL_OVERLAY_FADE_MS);
+            levelOverlayAlpha = Math.max(0f, 0.95f * (1f - p));
+            repaint();
+            if (p >= 1f) {
+                // 完成
+                ((Timer) ev.getSource()).stop();
+                levelOverlayVisible = false;
+                levelOverlayText = null;
+                levelOverlayAlpha = 0f;
+            }
+        });
+        levelOverlayFadeTimer.setRepeats(true);
+        levelOverlayFadeTimer.start();
+    }
+
+    public void hideLevelOverlay() {
+        if (levelOverlayHoldTimer != null) {
+            levelOverlayHoldTimer.stop();
+        }
+        if (levelOverlayFadeTimer != null) {
+            levelOverlayFadeTimer.stop();
+        }
+        levelOverlayVisible = false;
+        levelOverlayAlpha = 0f;
+        levelOverlayText = null;
+        repaint();
     }
 
     private void writeClearRecord(Cell firstCell, Cell secondCell, List<Position> linkPath) {
@@ -592,6 +707,8 @@ public class BoardPanel extends JPanel {
         }
 
         paintComboPopup(g2);
+        // 居中显示关卡信息覆盖层（如棋子数量与限时）
+        paintLevelOverlay(g2);
     }
 
     /**

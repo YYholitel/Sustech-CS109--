@@ -1,5 +1,6 @@
 package ui;
 
+import app.LevelProgressManager;
 import logic.CellGenerator;
 import logic.Difficulty;
 import model.GameBoard;
@@ -24,13 +25,20 @@ public class GameFrame extends JFrame {
     CellGenerator cellGenerator;
     int size;
     boolean gameEnded = false;
+    boolean paused = false;
     DifficultySelector difficultySelector;
+    String levelInfoText = "";
+    Difficulty currentLevel;
 
     public GameFrame(String title, int width, int height) {
+        this(title, width, height, Difficulty.Level1);
+    }
+
+    public GameFrame(String title, int width, int height, Difficulty initialDifficulty) {
         super(title);
         this.setResizable(true);
-        this.cellGenerator = new CellGenerator(Difficulty.Easy);
-        this.size = getSizeForDifficulty(Difficulty.Easy);
+        this.cellGenerator = new CellGenerator(initialDifficulty);
+        this.size = getSizeForDifficulty(initialDifficulty);
         this.title = title;
         this.width = width;
         this.height = height;
@@ -46,7 +54,9 @@ public class GameFrame extends JFrame {
                 this::evaluateGameState);
         boardPanel.setGameOver(true);
         // 在状态面板顶部创建并放置难度选择控件及用户/存档显示，避免与 SaveManager/UserManager 的 UI 冲突
-        this.difficultySelector = new DifficultySelector(120, 40, 10);
+        this.difficultySelector = new DifficultySelector(250, 40, 10);
+        this.difficultySelector.setSelectedDifficulty(initialDifficulty);
+        this.difficultySelector.setSelectorEnabled(false);
         this.statusPanel.add(difficultySelector);
 
         // 添加用户信息面板（左侧）和存档面板（右侧）到 statusPanel 顶部
@@ -61,15 +71,7 @@ public class GameFrame extends JFrame {
         this.statusPanel.setComponentZOrder(this.saveSlotsPanel, 0);
 
         // 将同一个 difficultySelector 传入 ControlPanel，确保只存在一个难度选择器
-        this.controlPanel = new ControlPanel(statusPanel, 0, 900, 800, 100, difficultySelector, difficulty -> {
-            cellGenerator.setDifficulty(difficulty);
-            int newSize = getSizeForDifficulty(difficulty);
-            GameBoard newBoard = cellGenerator.generateBoard(newSize);
-            boardPanel.setGameBoard(newBoard);
-            gameEnded = false;
-            boardPanel.setGameOver(false);
-            evaluateGameState();
-        }, () -> {
+        this.controlPanel = new ControlPanel(statusPanel, 0, 900, 800, 100, this::togglePauseResume, () -> {
             if (!boardPanel.undoLastClear()) {
                 Toolkit.getDefaultToolkit().beep();
             }
@@ -85,6 +87,7 @@ public class GameFrame extends JFrame {
             }
         });
         this.setVisible(true);
+        startLevel(initialDifficulty);
     }
 
     private void layoutGameUi() {
@@ -149,7 +152,7 @@ public class GameFrame extends JFrame {
     }
 
     private void evaluateGameState() {
-        if (gameEnded) {
+        if (gameEnded || paused) {
             return;
         }
         GameBoard board = boardPanel.getGameBoard();
@@ -172,11 +175,23 @@ public class GameFrame extends JFrame {
             return;
         }
         gameEnded = true;
+        paused = false;
         statusPanel.stopTimer();
         boardPanel.setGameOver(true);
+        boardPanel.setPaused(false);
+        controlPanel.updatePauseButtonText(false);
         if (win) {
+            LevelProgressManager.onLevelCleared(currentLevel);
             statusPanel.setStatus("WIN");
-            JOptionPane.showMessageDialog(this, "胜利！", "胜利", JOptionPane.INFORMATION_MESSAGE);
+            int nextIndex = currentLevel.ordinal() + 2;
+            if (nextIndex <= Difficulty.values().length) {
+                JOptionPane.showMessageDialog(this,
+                        "胜利！已解锁第" + nextIndex + "关",
+                        "胜利",
+                        JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "胜利！已通关全部关卡", "胜利", JOptionPane.INFORMATION_MESSAGE);
+            }
             return;
         }
         statusPanel.setStatus("LOSE");
@@ -190,10 +205,83 @@ public class GameFrame extends JFrame {
     }
 
     private int getSizeForDifficulty(Difficulty difficulty) {
-        if (difficulty == Difficulty.Easy) {
+        // 前三关与第一关统一使用 9 的尺寸（内部座标范围 size+2），其它关卡使用 10
+        if (difficulty == Difficulty.Level1 || difficulty == Difficulty.Level2 || difficulty == Difficulty.Level3) {
             return 9;
         }
         return 10;
+    }
+
+    private void startLevel(Difficulty difficulty) {
+        currentLevel = difficulty;
+        difficultySelector.setSelectedDifficulty(difficulty);
+        cellGenerator.setDifficulty(difficulty);
+
+        int newSize = getSizeForDifficulty(difficulty);
+        GameBoard newBoard = cellGenerator.generateBoard(newSize);
+        boardPanel.setGameBoard(newBoard);
+
+        gameEnded = false;
+        paused = false;
+        boardPanel.setGameOver(false);
+        boardPanel.setPaused(false);
+        statusPanel.getScores().resetAll();
+        statusPanel.startCountdown(difficulty.getTotalSeconds());
+
+        int levelIndex = difficulty.ordinal() + 1;
+        int pieceCount = countPieces(newBoard);
+        int limitSeconds = difficulty.getTotalSeconds();
+        levelInfoText = "关卡" + levelIndex + " | 棋子数量" + pieceCount + " | 限时间" + limitSeconds + "秒";
+        // 不再在顶部显示重复的棋子数量/限时文案，改为在棋盘中央显示覆盖层
+        java.util.Set<Integer> types = new java.util.HashSet<>();
+        for (int r = 0; r < newBoard.getRowCnt(); r++) {
+            for (int c = 0; c < newBoard.getColCnt(); c++) {
+                model.Cell cell = newBoard.getCell(r, c);
+                if (cell != null && !cell.isEmpty()) {
+                    types.add(cell.getIconIndex());
+                }
+            }
+        }
+        int distinctTypes = types.size();
+        if (boardPanel != null) {
+            String overlay = "棋子: " + pieceCount + "   种类: " + distinctTypes + "   限时: " + limitSeconds + "秒";
+            boardPanel.showLevelOverlay(overlay);
+        }
+        controlPanel.updatePauseButtonText(false);
+
+        boardPanel.startDroppingAnimation();
+        evaluateGameState();
+    }
+
+    private int countPieces(GameBoard board) {
+        int count = 0;
+        for (int r = 0; r < board.getRowCnt(); r++) {
+            for (int c = 0; c < board.getColCnt(); c++) {
+                if (!board.getCell(r, c).isEmpty()) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private void togglePauseResume() {
+        if (gameEnded) {
+            return;
+        }
+        if (paused) {
+            paused = false;
+            statusPanel.resumeCountdown();
+            boardPanel.setPaused(false);
+            statusPanel.setStatus(levelInfoText);
+            controlPanel.updatePauseButtonText(false);
+            return;
+        }
+        paused = true;
+        statusPanel.pauseCountdown();
+        boardPanel.setPaused(true);
+        statusPanel.setStatus("PAUSE");
+        controlPanel.updatePauseButtonText(true);
     }
 
     // 供外部 UI（存档/用户面板）访问当前棋盘、状态和难度选择器

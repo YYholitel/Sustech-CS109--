@@ -33,6 +33,7 @@ public class UserManager {
         public int totalGames;
         public int totalWins;
         public int highestScore;
+        public int maxUnlockedLevel;
 
         public UserData() {}
 
@@ -42,6 +43,7 @@ public class UserManager {
             this.totalGames = 0;
             this.totalWins = 0;
             this.highestScore = 0;
+            this.maxUnlockedLevel = 1;
         }
     }
 
@@ -72,6 +74,11 @@ public class UserManager {
             Map<String, UserData> loaded = gson.fromJson(json, mapType);
             if (loaded != null) {
                 users = loaded;
+                for (UserData userData : users.values()) {
+                    if (userData.maxUnlockedLevel <= 0) {
+                        userData.maxUnlockedLevel = 1;
+                    }
+                }
             }
         } catch (IOException e) {
             System.err.println("加载用户文件失败: " + e.getMessage());
@@ -212,5 +219,31 @@ public class UserManager {
             userData.highestScore = score;
         }
         saveUsers();
+    }
+
+    public int getCurrentUserMaxUnlockedLevel() {
+        if (currentUser == null) {
+            return 1;
+        }
+        UserData userData = users.get(currentUser);
+        if (userData == null) {
+            return 1;
+        }
+        return Math.max(1, userData.maxUnlockedLevel);
+    }
+
+    public void updateCurrentUserMaxUnlockedLevel(int maxUnlockedLevel) {
+        if (currentUser == null) {
+            return;
+        }
+        UserData userData = users.get(currentUser);
+        if (userData == null) {
+            return;
+        }
+        int normalized = Math.max(1, maxUnlockedLevel);
+        if (normalized > userData.maxUnlockedLevel) {
+            userData.maxUnlockedLevel = normalized;
+            saveUsers();
+        }
     }
 }

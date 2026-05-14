@@ -15,9 +15,9 @@ public class IconType extends JPanel {
     public IconType() {
         this.setLayout(new FlowLayout(FlowLayout.CENTER, 12, 10));
 
-        animalsButton = new ModernButton("🐶 动物");
-        iceCreamButton = new ModernButton("🍦 冰淇淋");
-        fruitsButton = new ModernButton("🍎 水果");
+        animalsButton = new ModernButton("可爱动物");
+        iceCreamButton = new ModernButton(" 美味冰淇淋");
+        fruitsButton = new ModernButton("Q弹水果");
 
         animalsButton.addActionListener(e -> setSelectedTheme(IconTheme.ANIMALS));
         iceCreamButton.addActionListener(e -> setSelectedTheme(IconTheme.ICE_CREAMS));

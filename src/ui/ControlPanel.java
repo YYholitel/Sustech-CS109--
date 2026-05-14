@@ -1,19 +1,15 @@
 package ui;
 
-import logic.Difficulty;
-
 import javax.swing.*;
 import java.awt.*;
-import java.util.function.Consumer;
 
 public class ControlPanel extends JPanel {
     private static final UiLayoutScaler LAYOUT_SCALER = new UiLayoutScaler(800, 100);
     StatusPanel statusPanel;
     ModernButton backButton;
-    ModernButton startButton;
+    ModernButton pauseButton;
     ModernButton undoButton;
-    DifficultySelector difficultySelector;
-    Consumer<Difficulty> onStart;
+    Runnable onPauseToggle;
     Runnable onUndo;
     Runnable onBackToInit;
     BoardPanel boardPanel;
@@ -31,14 +27,13 @@ public class ControlPanel extends JPanel {
      * @param offSetY            面板 Y 偏移
      * @param width              面板宽度
      * @param height             面板高度
-     * @param difficultySelector 外部注入的难度选择组件（避免与其它 UI 冲突）
-     * @param onStart            游戏开始回调，接收选择的 Difficulty
+         * @param onPauseToggle      暂停/继续回调
      * @param onUndo             撤销回调
      * @param boardPanel         棋盘面板引用，用于控制动画和获取游戏状态
      * @param gameFrame          游戏框架引用，用于检查游戏是否已结束
      */
     public ControlPanel(StatusPanel statusPanel, int offSetX, int offSetY, int width, int height,
-            DifficultySelector difficultySelector, Consumer<Difficulty> onStart, Runnable onUndo,
+             Runnable onPauseToggle, Runnable onUndo,
             Runnable onBackToInit, BoardPanel boardPanel, GameFrame gameFrame) {
         this.setLayout(null);
         this.setBounds(offSetX, offSetY, width, height);
@@ -49,19 +44,17 @@ public class ControlPanel extends JPanel {
         this.onBackToInit = onBackToInit;
         this.boardPanel = boardPanel;
         this.gameFrame = gameFrame;
-        this.backButton = new ModernButton("返回初始化");
-        this.startButton = new ModernButton("开始");
+        this.backButton = new ModernButton("返回");
+        this.pauseButton = new ModernButton("暂停");
         this.undoButton = new ModernButton("撤销");
-        this.onStart = onStart;
+        this.onPauseToggle = onPauseToggle;
         this.onUndo = onUndo;
         this.statusPanel = statusPanel;
-        // 使用外部传入的难度选择器，确保界面上只存在一个难度选择区域
-        this.difficultySelector = difficultySelector;
         backButton.setFont(UiFont.font(Font.BOLD, 16));
-        startButton.setFont(UiFont.font(Font.BOLD, 16));
+        pauseButton.setFont(UiFont.font(Font.BOLD, 16));
         undoButton.setFont(UiFont.font(Font.BOLD, 16));
         this.add(backButton);
-        this.add(startButton);
+        this.add(pauseButton);
         this.add(undoButton);
         updateLayout(width, height);
         this.backButton.addActionListener(e -> {
@@ -69,36 +62,12 @@ public class ControlPanel extends JPanel {
                 onBackToInit.run();
             }
         });
-        // 难度设置
-        this.startButton.addActionListener(e -> {
-            // 仅当已经开始过一次且当前游戏未结束时，才提示是否重新开始
-            if (statusPanel.hasStarted() && !gameFrame.isGameEnded()) {
-                int result = JOptionPane.showConfirmDialog(
-                        this,
-                        "游戏尚未结束，是否要重新开始呀",
-                        "确认重新开始",
-                        JOptionPane.YES_NO_OPTION,
-                        JOptionPane.QUESTION_MESSAGE);
-
-                if (result != JOptionPane.YES_OPTION) {
-                    return; // 用户选择"否", 不重新开始
-                }
+        this.pauseButton.addActionListener(e -> {
+            if (gameFrame != null && gameFrame.isGameEnded()) {
+                return;
             }
-
-            // 启动游戏
-            statusPanel.setStatus("RUN");
-            // 重置分数和连对计数，确保新游戏从零开始
-            statusPanel.getScores().resetAll();
-            // 启动倒计时
-            Difficulty selected = difficultySelector.getSelectedDifficulty();
-            statusPanel.startCountdown(selected.getTotalSeconds());
-            if (onStart != null) {
-                onStart.accept(selected);
-            }
-
-            // 启动棋子掉落动画
-            if (boardPanel != null) {
-                boardPanel.startDroppingAnimation();
+            if (onPauseToggle != null) {
+                onPauseToggle.run();
             }
         });
 
@@ -124,9 +93,13 @@ public class ControlPanel extends JPanel {
         int y = (this.height - btnHeight) / 2;
 
         backButton.setBounds(baseX, y, btnWidth, btnHeight);
-        startButton.setBounds(baseX + btnWidth + gap, y, btnWidth, btnHeight);
+        pauseButton.setBounds(baseX + btnWidth + gap, y, btnWidth, btnHeight);
         undoButton.setBounds(baseX + (btnWidth + gap) * 2, y, btnWidth, btnHeight);
         repaint();
+    }
+
+    public void updatePauseButtonText(boolean paused) {
+        pauseButton.setText(paused ? "继续" : "暂停");
     }
 
 }
