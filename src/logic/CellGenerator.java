@@ -43,7 +43,7 @@ public class CellGenerator {
       }
 
       GameBoard gameBoard = new GameBoard(total, total, board);
-      if (fillByBacktrackingDFS(gameBoard, board, fillPositions)) {
+      if (filling(gameBoard, board, fillPositions)) {
         return gameBoard;
       }
       result = gameBoard;
@@ -80,7 +80,7 @@ public class CellGenerator {
     }
   }
 
-    private boolean fillByBacktrackingDFS(GameBoard gameBoard, Cell[][] board, java.util.List<Position> fillPositions) {
+    private boolean filling(GameBoard gameBoard, Cell[][] board, java.util.List<Position> fillPositions) {
         int maxIconType = difficulty.getMaxIconType();
         int total = fillPositions.size();
 

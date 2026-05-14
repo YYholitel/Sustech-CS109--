@@ -1,13 +1,11 @@
 package app;
 
-import ui.GameFrame;
+import ui.InitFrame;
 
 import javax.swing.*;
 
 public class Main2 {
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new LoginFrame();
-        });
+        SwingUtilities.invokeLater(InitFrame::new);
     }
 }

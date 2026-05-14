@@ -4,6 +4,7 @@ import javax.swing.*;
 import java.awt.*;
 
 public class StatusPanel extends JPanel {
+    private static final UiLayoutScaler LAYOUT_SCALER = new UiLayoutScaler(800, 100);
     JLabel statusLabel;
     JLabel timeLabel;
     Scores scores;
@@ -14,6 +15,7 @@ public class StatusPanel extends JPanel {
     int offSetY;
     int width;
     int height;
+    private boolean started = false;
 
     public StatusPanel(int offSetX, int offSetY, int width, int height) {
         this.setLayout(null);
@@ -39,30 +41,41 @@ public class StatusPanel extends JPanel {
                 }
             }
         });
-        statusLabel.setFont(new Font("Arial", Font.BOLD, 50));
-        timeLabel.setFont(new Font("Arial", Font.BOLD, 50));
-        Dimension size = statusLabel.getPreferredSize();
-        Dimension timeLabelSize = timeLabel.getPreferredSize();
-        int x = (width - size.width) / 6;
-        int y = (height - size.height) / 3;
-        int time_x = (width - timeLabelSize.width) * 5 / 6;
-        int time_y = (height - timeLabelSize.height) / 3;
-        statusLabel.setBounds(x, y, size.width, size.height);
-        timeLabel.setBounds(time_x, time_y, timeLabelSize.width, timeLabelSize.height);
-        int scoresWidth = width / 3;
-        int scoresHeight = height - 20;
-        scores.setBounds((width - scoresWidth) / 2, 10, scoresWidth, scoresHeight);
+        statusLabel.setFont(UiFont.font(Font.BOLD, 50));
+        timeLabel.setFont(UiFont.font(Font.BOLD, 50));
         this.add(statusLabel);
         this.add(scores);
         this.add(timeLabel);
+        updateLayout(width, height);
     }
 
     public void setStatus(String text) {
         statusLabel.setText(text);
+        updateLayout(width, height);
+    }
+
+    public void updateLayout(int width, int height) {
+        this.width = Math.max(1, width);
+        this.height = Math.max(1, height);
+        double scale = LAYOUT_SCALER.getScaleFactor(this.width, this.height);
+        int topBarHeight = LAYOUT_SCALER.scale(36, scale);
+        int contentY = topBarHeight;
+        int contentHeight = Math.max(1, this.height - topBarHeight);
+
         Dimension size = statusLabel.getPreferredSize();
-        int x = (width - size.width) / 6;
-        int y = (height - size.height) / 3;
+        Dimension timeLabelSize = timeLabel.getPreferredSize();
+        int x = (this.width - size.width) / 6;
+        int y = contentY + Math.max(0, (contentHeight - size.height) / 2);
+        int timeX = (this.width - timeLabelSize.width) * 5 / 6;
+        int timeY = contentY + Math.max(0, (contentHeight - timeLabelSize.height) / 2);
         statusLabel.setBounds(x, y, size.width, size.height);
+        timeLabel.setBounds(timeX, timeY, timeLabelSize.width, timeLabelSize.height);
+
+        int scoresWidth = LAYOUT_SCALER.scale(240, scale);
+        int scoresHeight = Math.max(1, contentHeight - LAYOUT_SCALER.scale(6, scale));
+        scores.setBounds((this.width - scoresWidth) / 2, contentY + LAYOUT_SCALER.scale(3, scale), scoresWidth,
+                scoresHeight);
+        scores.repaint();
         repaint();
     }
 
@@ -73,6 +86,7 @@ public class StatusPanel extends JPanel {
     public void startCountdown(int totalSeconds) {
         stopTimer();
         remainingSeconds = Math.max(0, totalSeconds);
+        started = true;
         updateTimeLabel();
         timer.start();
     }
@@ -86,7 +100,12 @@ public class StatusPanel extends JPanel {
     public void resetTimer() {
         stopTimer();
         remainingSeconds = 0;
+        // 保留 started 状态：一旦用户开始过游戏，视为已开始，不再将其视为第一次
         updateTimeLabel();
+    }
+
+    public boolean hasStarted() {
+        return started;
     }
 
     public int getRemainingSeconds() {

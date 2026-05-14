@@ -2,10 +2,13 @@ package ui;
 
 import model.*;
 import model.Rectangle;
+import ui.AppConfig;
+import ui.IconTheme;
 import utils.Utils;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -14,6 +17,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Iterator;
 
 public class BoardPanel extends JPanel {
     int offSetX;
@@ -39,6 +45,22 @@ public class BoardPanel extends JPanel {
     boolean gameOver = false;
     int recordCount = 0;
     UndoSnapshot lastUndo = null;
+    private final Timer comboPopupTimer;
+    private String comboPopupText = null;
+    private Color comboPopupColor = new Color(76, 175, 80);
+    private float comboPopupAlpha = 0f;
+    private long comboPopupShownAt = 0L;
+    private static final int COMBO_POPUP_DURATION_MS = 1200;
+    private static final int COMBO_POPUP_FADE_START_MS = 750;
+    private static final int COMBO_POPUP_TICK_MS = 40;
+    private final Font comboPopupFont = new Font("Serif", Font.BOLD | Font.ITALIC, 54);
+
+    // 简易淡出+缩放动画（最小实现）
+    private Map<String, Long> fadeMap = new HashMap<>(); // key -> startTime
+    private List<Position[]> fadingPairs = new ArrayList<>();
+    private Timer animationTimer = null;
+    private static final int FADE_ANIM_TICK_MS = 16; // 更平滑 (~60 FPS)
+    private static final int FADE_DURATION_MS = 400; // 延长淡出时长
 
     private static class UndoSnapshot {
         private final Position posA;
@@ -115,31 +137,18 @@ public class BoardPanel extends JPanel {
         this.statusPanel = statusPanel;
         this.onBoardUpdated = onBoardUpdated;
         resetTracking();
-        File dir = new File("resource");
+        IconTheme selectedTheme = AppConfig.getSelectedIconTheme();
+        File dir = selectedTheme == null ? new File("resource/pictures/animals") : selectedTheme.getDirectory();
+        if (!dir.exists()) {
+            dir = new File("resource/pictures/animals");
+        }
         File[] files = dir.listFiles();
+
+        imageList.add(createBlankImage());
 
         // 加载图片，如果存在0.jpg或0.png，优先加载它作为空白图像，并确保它在imageList的第一个位置 4.29 21.13
 
         if (files != null) {
-            File zeroJpg = null;
-            File zeroPng = null;
-            for (File file : files) {
-                if (!file.isFile()) {
-                    continue;
-                }
-                String name = file.getName().toLowerCase();
-                if (name.equals("0.jpg")) {
-                    zeroJpg = file;
-                } else if (name.equals("0.png")) {
-                    zeroPng = file;
-                }
-            }
-            File zeroFile = (zeroJpg != null) ? zeroJpg : zeroPng;
-            if (zeroFile != null) {
-                imageList.add(new ImageIcon(zeroFile.getPath()).getImage());
-            }
-
-            java.util.Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
             for (File file : files) {
                 if (!file.isFile()) {
                     continue;
@@ -161,6 +170,26 @@ public class BoardPanel extends JPanel {
                 handleClick(e.getX(), e.getY());
             }
         });
+
+        comboPopupTimer = new Timer(COMBO_POPUP_TICK_MS, e -> updateComboPopup());
+        comboPopupTimer.setRepeats(true);
+    }
+
+    public void setBoardBounds(int x, int y, int width, int height) {
+        this.offSetX = x;
+        this.offSetY = y;
+        this.width = Math.max(1, width);
+        this.height = Math.max(1, height);
+        setBounds(x, y, this.width, this.height);
+        setPreferredSize(new Dimension(this.width, this.height));
+        this.cellWidth = Math.max(1, this.width / Math.max(1, totalCol));
+        this.cellHeight = Math.max(1, this.height / Math.max(1, totalRow));
+        repaint();
+    }
+
+    private Image createBlankImage() {
+        BufferedImage blank = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        return blank;
     }
 
     // 设置棋盘，每次设置新的棋盘时重置选中状态和连线状态
@@ -176,6 +205,7 @@ public class BoardPanel extends JPanel {
         this.lineList.clear();
         this.animating = false;
         this.gameOver = false;
+        hideComboPopup();
         resetTracking();
         repaint();
     }
@@ -188,6 +218,7 @@ public class BoardPanel extends JPanel {
             secondSelected = null;
             lastUndo = null;
             clearLine();
+            hideComboPopup();
         }
     }
 
@@ -231,7 +262,6 @@ public class BoardPanel extends JPanel {
         if (animating) {
             return;
         }
-
         Position pos = getPositionByPoint(x, y);
         if (pos == null) {
             return;
@@ -253,7 +283,7 @@ public class BoardPanel extends JPanel {
         if (firstSelected.equals(pos)) {
             clickedCell.setChosen(false);
             firstSelected = null;
-            secondSelected = pos;
+            secondSelected = null;
             repaint();
             return;
         }
@@ -277,28 +307,9 @@ public class BoardPanel extends JPanel {
             writeClearRecord(firstCell, secondCell, linkPath);
             animating = true;
             showLinkPath(linkPath);
-            Timer timer = new Timer(300, e -> {
-                Cell c1 = gameBoard.getCell(firstSelected.getRow(), firstSelected.getCol());
-                Cell c2 = gameBoard.getCell(secondSelected.getRow(), secondSelected.getCol());
-                c1.setEmpty(true);
-                c2.setEmpty(true);
-                c1.setChosen(false);
-                c2.setChosen(false);
-                lineVisible = false;
-                lineList.clear();
-                if (scores != null) {
-                    scores.onPairCleared();
-                }
-                firstSelected = null;
-                secondSelected = null;
-                animating = false;
-                repaint();
-                if (onBoardUpdated != null) {
-                    onBoardUpdated.run();
-                }
-            });
-            timer.setRepeats(false);
-            timer.start();
+
+            // 启动简易淡出+缩放动画（非阻塞）
+            startFadeAnimationForPair(firstSelected, secondSelected);
         } else {
             gameBoard.clearAllChosen();
             secondCell.setChosen(true);
@@ -309,8 +320,112 @@ public class BoardPanel extends JPanel {
             if (scores != null) {
                 scores.resetCombo();
             }
+            hideComboPopup();
             repaint();
         }
+    }
+
+    private void showComboPopup(int combo) {
+        if (combo <= 0) {
+            hideComboPopup();
+            return;
+        }
+        comboPopupText = "COMBO x" + combo;
+        comboPopupColor = getComboPopupColor(combo);
+        comboPopupAlpha = 1f;
+        comboPopupShownAt = System.currentTimeMillis();
+        comboPopupTimer.restart();
+        repaint();
+    }
+
+    private void hideComboPopup() {
+        comboPopupTimer.stop();
+        comboPopupText = null;
+        comboPopupAlpha = 0f;
+        comboPopupShownAt = 0L;
+    }
+
+    private void updateComboPopup() {
+        if (comboPopupText == null) {
+            comboPopupTimer.stop();
+            return;
+        }
+        long elapsed = System.currentTimeMillis() - comboPopupShownAt;
+        if (elapsed >= COMBO_POPUP_DURATION_MS) {
+            hideComboPopup();
+            repaint();
+            return;
+        }
+        if (elapsed >= COMBO_POPUP_FADE_START_MS) {
+            float fadeProgress = (elapsed - COMBO_POPUP_FADE_START_MS)
+                    / (float) (COMBO_POPUP_DURATION_MS - COMBO_POPUP_FADE_START_MS);
+            comboPopupAlpha = Math.max(0f, 1f - fadeProgress);
+        } else {
+            comboPopupAlpha = 1f;
+        }
+        repaint();
+    }
+
+    private Color getComboPopupColor(int combo) {
+        if (combo <= 1) {
+            return new Color(76, 175, 80);
+        }
+        if (combo == 2) {
+            return new Color(144, 238, 144);
+        }
+        if (combo == 3) {
+            return new Color(255, 248, 196);
+        }
+        if (combo == 4) {
+            return new Color(255, 235, 59);
+        }
+        if (combo == 5) {
+            return new Color(255, 167, 38);
+        }
+        if ( combo == 6){
+            return new Color (255,60,43);
+        }
+        if (combo == 7){
+            return new Color (255,0,0);
+        }
+        return null;
+    }
+
+
+    private void paintComboPopup(Graphics2D g2) {
+        if (comboPopupText == null || comboPopupAlpha <= 0f) {
+            return;
+        }
+        Graphics2D popup = (Graphics2D) g2.create();
+        popup.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        popup.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        popup.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+        popup.setFont(comboPopupFont);
+        FontMetrics metrics = popup.getFontMetrics();
+        int textWidth = metrics.stringWidth(comboPopupText);
+        int textHeight = metrics.getHeight();
+        int ascent = metrics.getAscent();
+        int x = (getWidth() - textWidth) / 2;
+        int y = (getHeight() - textHeight) / 2 + ascent;
+        Composite originalComposite = popup.getComposite();
+
+        popup.setComposite(AlphaComposite.SrcOver.derive(comboPopupAlpha * 0.18f));
+        popup.setColor(comboPopupColor);
+        popup.drawString(comboPopupText, x - 4, y - 4);
+        popup.drawString(comboPopupText, x + 4, y - 4);
+        popup.drawString(comboPopupText, x - 4, y + 4);
+        popup.drawString(comboPopupText, x + 4, y + 4);
+
+        popup.setComposite(AlphaComposite.SrcOver.derive(comboPopupAlpha * 0.35f));
+        popup.setColor(Color.BLACK);
+        popup.drawString(comboPopupText, x + 3, y + 5);
+
+        popup.setComposite(AlphaComposite.SrcOver.derive(comboPopupAlpha));
+        popup.setColor(comboPopupColor);
+        popup.drawString(comboPopupText, x, y);
+
+        popup.setComposite(originalComposite);
+        popup.dispose();
     }
 
     private void writeClearRecord(Cell firstCell, Cell secondCell, List<Position> linkPath) {
@@ -400,14 +515,55 @@ public class BoardPanel extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
+        this.width = Math.max(1, getWidth());
+        this.height = Math.max(1, getHeight());
+        this.cellWidth = Math.max(1, this.width / Math.max(1, totalCol));
+        this.cellHeight = Math.max(1, this.height / Math.max(1, totalRow));
         Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
         for (int i = 0; i < gameBoard.getRowCnt(); i++) {
             for (int j = 0; j < gameBoard.getColCnt(); j++) {
-                Rectangle rec = getRectangle(new Position(i, j));
-                g2.drawImage(
-                        imageList.get(gameBoard.getCell(i, j).getIconIndex()),
-                        rec.getX(), rec.getY(), rec.getWidth(), rec.getHeight(),
-                        this);
+                Position pos = new Position(i, j);
+                Rectangle rec = getRectangle(pos);
+
+                // 跳过正在消除的棋子（动画期间）
+                // 淡出动画已禁用
+                if (false) {
+                    // 淡出动画代码已注释
+                    continue; // 跳过边框绘制
+                }
+
+                // 直接绘制棋子（不再做开局隐身/掉落显隐）
+                String fadeKey = posKey(pos);
+                if (fadeMap.containsKey(fadeKey)) {
+                    long start = fadeMap.get(fadeKey);
+                    float prog = Math.min(1f, (System.currentTimeMillis() - start) / (float) FADE_DURATION_MS);
+                    float eased = easeOutQuad(prog);
+                    float alpha = Math.max(0f, 1f - eased);
+                    float scale = 1f - eased * 0.35f; // 缩小到约65%
+
+                    Composite orig = g2.getComposite();
+                    g2.setComposite(AlphaComposite.SrcOver.derive(alpha));
+
+                    int scaledW = (int) (rec.getWidth() * scale);
+                    int scaledH = (int) (rec.getHeight() * scale);
+                    int offX = rec.getX() + (rec.getWidth() - scaledW) / 2;
+                    int offY = rec.getY() + (rec.getHeight() - scaledH) / 2;
+                    g2.drawImage(
+                            imageList.get(gameBoard.getCell(i, j).getIconIndex()),
+                            offX, offY, scaledW, scaledH,
+                            this);
+
+                    g2.setComposite(orig);
+                } else {
+                    g2.drawImage(
+                            imageList.get(gameBoard.getCell(i, j).getIconIndex()),
+                            rec.getX(), rec.getY(), rec.getWidth(), rec.getHeight(),
+                            this);
+                }
+
+                // 绘制边框
                 if (gameBoard.getCell(i, j).getIsChosen()) {
                     g2.setColor(Color.RED);
                     g2.setStroke(new BasicStroke(3));
@@ -427,15 +583,138 @@ public class BoardPanel extends JPanel {
                 }
             }
         }
+
+        // 绘制连线（带动画效果）
         g2.setColor(Color.RED);
         g2.setStroke(new BasicStroke(3));
         if (lineVisible) {
-            for (Line line : lineList) {
-                Point p1 = getCenterPoint(line.getStart());
-                Point p2 = getCenterPoint(line.getEnd());
-                g2.drawLine(p1.x, p1.y, p2.x, p2.y);
-            }
+            paintLinesWithAnimation(g2);
         }
 
+        paintComboPopup(g2);
     }
+
+    /**
+     * 绘制带动画效果的连线
+     */
+    private void paintLinesWithAnimation(Graphics2D g2) {
+        if (lineList.isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < lineList.size(); i++) {
+            Line line = lineList.get(i);
+            Point p1 = getCenterPoint(line.getStart());
+            Point p2 = getCenterPoint(line.getEnd());
+
+            // 计算当前线段的显示比例
+            float segmentRatio = 1.0f; // 简化：直接显示所有线
+
+            if (segmentRatio > 0) {
+                // 如果线段未完全显示，画部分线
+                if (segmentRatio < 1.0f) {
+                    int endX = (int) (p1.x + (p2.x - p1.x) * segmentRatio);
+                    int endY = (int) (p1.y + (p2.y - p1.y) * segmentRatio);
+                    g2.drawLine(p1.x, p1.y, endX, endY);
+                } else {
+                    // 完全显示这条线
+                    g2.drawLine(p1.x, p1.y, p2.x, p2.y);
+                }
+            }
+        }
+    }
+
+    public void startDroppingAnimation() {
+        // 兼容调用方：不再执行开局隐身/掉落动画，直接刷新
+        repaint();
+    }
+
+    // 简易动画 - 帮助方法
+    private String posKey(Position p) {
+        return p.getRow() + "_" + p.getCol();
+    }
+
+    private void startFadeAnimationForPair(Position a, Position b) {
+        long now = System.currentTimeMillis();
+        fadeMap.put(posKey(a), now);
+        fadeMap.put(posKey(b), now);
+        fadingPairs.add(new Position[] { a, b });
+
+        if (animationTimer == null) {
+            animationTimer = new Timer(FADE_ANIM_TICK_MS, ev -> {
+                long t = System.currentTimeMillis();
+                // 检查完成的配对
+                Iterator<Position[]> it = fadingPairs.iterator();
+                List<Position[]> finished = new ArrayList<>();
+                while (it.hasNext()) {
+                    Position[] pair = it.next();
+                    String k1 = posKey(pair[0]);
+                    String k2 = posKey(pair[1]);
+                    Long s1 = fadeMap.get(k1);
+                    Long s2 = fadeMap.get(k2);
+                    if (s1 == null || s2 == null)
+                        continue;
+                    if (t - s1 >= FADE_DURATION_MS && t - s2 >= FADE_DURATION_MS) {
+                        finished.add(pair);
+                    }
+                }
+                for (Position[] pair : finished) {
+                    // 真正移除棋子
+                    Cell c1 = gameBoard.getCell(pair[0].getRow(), pair[0].getCol());
+                    Cell c2 = gameBoard.getCell(pair[1].getRow(), pair[1].getCol());
+                    if (c1 != null) {
+                        c1.setEmpty(true);
+                        c1.setChosen(false);
+                    }
+                    if (c2 != null) {
+                        c2.setEmpty(true);
+                        c2.setChosen(false);
+                    }
+                    fadeMap.remove(posKey(pair[0]));
+                    fadeMap.remove(posKey(pair[1]));
+                    fadingPairs.remove(pair);
+                    lineVisible = false;
+                    lineList.clear();
+                    if (scores != null) {
+                        scores.onPairCleared();
+                        showComboPopup(scores.getCombo());
+                    }
+                    firstSelected = null;
+                    secondSelected = null;
+                    animating = false;
+                    if (onBoardUpdated != null) {
+                        onBoardUpdated.run();
+                    }
+                }
+                repaint();
+                // 停止计时器当没有活动动画
+                if (fadingPairs.isEmpty()) {
+                    ((Timer) ev.getSource()).stop();
+                    animationTimer = null;
+                }
+            });
+            animationTimer.setRepeats(true);
+            animationTimer.start();
+        }
+    }
+
+    // 简单缓动函数：缓出
+    private static float easeOutQuad(float p) {
+        return 1 - (1 - p) * (1 - p);
+    }
+
+    /**
+     * 检查是否正在进行掉落动画
+     */
+    public boolean isAnimatingDrop() {
+        return false;
+    }
+
+    /**
+     * 检查棋子是否可见
+     */
+    public boolean areCellsVisible() {
+        return true;
+    }
+
 }

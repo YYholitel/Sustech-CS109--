@@ -15,22 +15,35 @@ import java.time.format.DateTimeFormatter;
  * 顶部存档面板：提供三个存档槽位的快速入口，点击槽位可执行存、读、删操作（弹窗）
  */
 public class SaveSlotsPanel extends JPanel {
-  private final JButton[] slotButtons = new JButton[3];
+  private final ModernButton[] slotButtons = new ModernButton[3];
   private final JFrame parent;
+  private static final UiLayoutScaler LAYOUT_SCALER = new UiLayoutScaler(180, 30);
 
   public SaveSlotsPanel(JFrame parent) {
     this.parent = parent;
     this.setLayout(null);
     for (int i = 0; i < 3; i++) {
-      JButton b = new JButton("S" + i);
-      b.setFont(new Font("Arial", Font.PLAIN, 12));
-      b.setBounds(i * 60, 0, 58, 30);
+      ModernButton b = new ModernButton("S" + i);
+      b.setFont(UiFont.font(Font.PLAIN, 12));
       final int idx = i;
       b.addActionListener(e -> openSlotDialog(idx));
       slotButtons[i] = b;
       this.add(b);
     }
+    updateLayout(180, 30);
     refreshTooltips();
+  }
+
+  public void updateLayout(int width, int height) {
+    double scale = LAYOUT_SCALER.getScaleFactor(Math.max(1, width), Math.max(1, height));
+    int buttonWidth = LAYOUT_SCALER.scale(58, scale);
+    int buttonHeight = LAYOUT_SCALER.scale(30, scale);
+    int gap = LAYOUT_SCALER.scale(2, scale);
+    for (int i = 0; i < 3; i++) {
+      slotButtons[i].setBounds(i * (buttonWidth + gap), 0, buttonWidth, buttonHeight);
+    }
+    setPreferredSize(new Dimension(3 * buttonWidth + 2 * gap, buttonHeight));
+    repaint();
   }
 
   private void refreshTooltips() {
@@ -57,18 +70,22 @@ public class SaveSlotsPanel extends JPanel {
     d.setLayout(null);
 
     JLabel infoLabel = new JLabel();
+    infoLabel.setFont(UiFont.font(Font.PLAIN, 12));
     infoLabel.setBounds(10, 10, 300, 30);
     d.add(infoLabel);
 
-    JButton saveBtn = new JButton("保存");
+    ModernButton saveBtn = new ModernButton("保存");
+    saveBtn.setFont(UiFont.font(Font.BOLD, 12));
     saveBtn.setBounds(10, 50, 90, 30);
     d.add(saveBtn);
 
-    JButton loadBtn = new JButton("读取");
+    ModernButton loadBtn = new ModernButton("读取");
+    loadBtn.setFont(UiFont.font(Font.BOLD, 12));
     loadBtn.setBounds(110, 50, 90, 30);
     d.add(loadBtn);
 
-    JButton delBtn = new JButton("删除");
+    ModernButton delBtn = new ModernButton("删除");
+    delBtn.setFont(UiFont.font(Font.BOLD, 12));
     delBtn.setBounds(210, 50, 90, 30);
     d.add(delBtn);
 

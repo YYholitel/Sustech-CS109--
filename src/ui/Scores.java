@@ -13,7 +13,7 @@ public class Scores extends JPanel {
     this.setLayout(new GridLayout(2, 1));
     this.scoreLabel = new JLabel("Score: 0");
     this.comboLabel = new JLabel("Combo: 0");
-    Font font = new Font("Arial", Font.BOLD, 24);
+    Font font = UiFont.font(Font.BOLD, 24);
     scoreLabel.setFont(font);
     comboLabel.setFont(font);
     this.add(scoreLabel);
