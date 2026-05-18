@@ -1,6 +1,7 @@
 package ui;
 
 import app.LoginFrame;
+import logic.Difficulty;
 
 import javax.swing.*;
 import java.awt.*;
@@ -24,8 +25,6 @@ public class InitFrame extends JFrame {
 
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.setOpaque(false);
-
-
 
         IconType iconTypePanel = new IconType();
         JPanel wrapper = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -52,13 +51,19 @@ public class InitFrame extends JFrame {
             new LevelSelectFrame();
         });
 
+        ModernButton rankingButton = new ModernButton("排行榜");
+        rankingButton.setFont(UiFont.font(Font.BOLD, 14));
+        rankingButton.addActionListener(e -> RankingFrame.showRanking());
+
         ModernButton exitButton = new ModernButton("退出");
         exitButton.setFont(UiFont.font(Font.PLAIN, 14));
         exitButton.addActionListener(e -> System.exit(0));
 
         bottomPanel.add(continueButton);
         bottomPanel.add(challengeButton);
+        bottomPanel.add(rankingButton);
         bottomPanel.add(exitButton);
+
         root.add(bottomPanel, BorderLayout.SOUTH);
 
         setContentPane(root);

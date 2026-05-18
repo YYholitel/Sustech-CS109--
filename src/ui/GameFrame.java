@@ -1,6 +1,7 @@
 package ui;
 
 import app.LevelProgressManager;
+import app.UserManager;
 import logic.CellGenerator;
 import logic.Difficulty;
 import model.GameBoard;
@@ -180,17 +181,30 @@ public class GameFrame extends JFrame {
         boardPanel.setGameOver(true);
         boardPanel.setPaused(false);
         controlPanel.updatePauseButtonText(false);
+
         if (win) {
+            // 计算用时（总时间 - 剩余时间）
+            int totalSeconds = currentLevel.getTotalSeconds();
+            int remaining = statusPanel.getRemainingSeconds();
+            int usedSeconds = totalSeconds - remaining;
+            int score = statusPanel.getScores().getScore();
+
+            // 记录成绩到用户数据
+            UserManager.getInstance().addGameRecord(currentLevel.name(), usedSeconds, score);
+
             LevelProgressManager.onLevelCleared(currentLevel);
             statusPanel.setStatus("WIN");
             int nextIndex = currentLevel.ordinal() + 2;
             if (nextIndex <= Difficulty.values().length) {
                 JOptionPane.showMessageDialog(this,
-                        "胜利！已解锁第" + nextIndex + "关",
+                        "胜利！已解锁第" + nextIndex + "关\n用时: " + formatTime(usedSeconds) + "  得分: " + score,
                         "胜利",
                         JOptionPane.INFORMATION_MESSAGE);
             } else {
-                JOptionPane.showMessageDialog(this, "胜利！已通关全部关卡", "胜利", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "胜利！已通关全部关卡\n用时: " + formatTime(usedSeconds) + "  得分: " + score,
+                        "胜利",
+                        JOptionPane.INFORMATION_MESSAGE);
             }
             return;
         }
@@ -202,6 +216,16 @@ public class GameFrame extends JFrame {
         } else {
             JOptionPane.showMessageDialog(this, "游戏失败！", "失败", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    // 添加辅助方法格式化时间
+    private String formatTime(int seconds) {
+        int minutes = seconds / 60;
+        int secs = seconds % 60;
+        if (minutes > 0) {
+            return String.format("%d分%d秒", minutes, secs);
+        }
+        return String.format("%d秒", secs);
     }
 
     private int getSizeForDifficulty(Difficulty difficulty) {
